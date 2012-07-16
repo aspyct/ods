@@ -19,6 +19,14 @@ struct server_params {
     int max_clients;
 };
 
+typedef void (*fd_action_t)(int fd, void *data);
+
+struct fd_info {
+    int fd;
+    void *data;
+    fd_action_t action;
+};
+
 static void server(struct server_params *params);
 static int create_server(struct server_params *params);
 
@@ -51,7 +59,17 @@ int main(int argc, char *argv[]) {
 void server(struct server_params *params) {
     int server_fd;
     poller_t poller;
-    poller_ready *ready_fds = calloc(params->max_clients, sizeof(poller_ready));
+    poller_ready *ready_fds;
+    struct fd_info *fd_info;
+    int open_max;
+    
+    ready_fds = calloc(params->max_clients, sizeof(poller_ready));
+
+    open_max = sysconf(_SC_OPEN_MAX);
+    if (open_max < 0) {
+        open_max = 1024; // Safe default value for max number of fds
+    }
+    fd_info = calloc(open_max, sizeof(fd_info));
 
     server_fd = create_server(params);
     if (server_fd < 0) {
@@ -59,8 +77,8 @@ void server(struct server_params *params) {
         exit(1);
     }
     else {
-        int sock = accept(server_fd, NULL, NULL);
-        close(sock);
+        // Set the accept handler for server_fd
+
 
         if (poller_init(&poller) < 0) {
             perror("Could not init poller");
