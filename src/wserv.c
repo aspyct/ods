@@ -37,7 +37,11 @@ int main(int argc, char *argv[]) {
 
 void serve(struct ods_server_params *params) {
     struct ods_server server;
-    ods_server_init(&server, params);
+    if (ods_server_init(&server, params) < 0) {
+        perror("Could not initialize server");
+        exit(1);
+    }
+
     ods_server_loop(&server); 
 }
 
