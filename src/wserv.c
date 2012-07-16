@@ -73,9 +73,6 @@ void server(struct server_params *params) {
         }
         
         for (;;) {
-            // Careful, epoll is available on linux only
-            // TODO Externalize this
-            
             poller_wait(&poller, ready_fds, params->max_clients, 10000);
             printf("poller_wait() exited\n");
         }
