@@ -14,15 +14,8 @@
 
 #include "poller.h"
 
-enum _http_request_status_t {
-    incomplete,
-    complete,
-    invalid
-};
-
 static int _make_server_socket(struct addrinfo *ai, int qlen);
 static int _create_server(struct ods_server_params *params);
-static enum _http_request_status_t _http_request_status(const char *buffer, int len);
 
 int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd) {
     int client_fd;
@@ -46,34 +39,39 @@ int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd) 
 }
 
 struct ods_welcome_data *ods_welcome_data_create() {
-    return calloc(1, sizeof(struct ods_welcome_data));
+    struct ods_welcome_data *data = calloc(1, sizeof(struct ods_welcome_data));
+    // TODO Put this magic number somewhere else
+    ods_http_request_parser_init(&data->parser, 4096);
+
+    return data;
 }
 
+#define BUFSIZE 4096
 int ods_welcome(struct ods_server *server, struct ods_welcome_data *data, int fd) {
     int n;
-    // -1 to keep a \0 at the end
-    int remaining = ODS_WELCOME_DATA_BUFSIZE - data->offset - 1; 
-    char *p = data->buffer + data->offset;
+    char buffer[BUFSIZE];
 
-    while (remaining && (n = read(fd, p, remaining)) >= 0) {
+    while ((n = read(fd, buffer, BUFSIZE)) >= 0) {
         if (n == 0) {
            // Client down
            ods_server_drop_client(server, fd);
            return -1;
         }
-
-        remaining -= n;
-        data->offset += n;
         
-        switch (_http_request_status(data->buffer, data->offset)) {
-            case invalid:
+        switch (ods_http_request_parser_feed(&data->parser, buffer, n)) {
+            case 1:
+                // Done, yippee
+                ods_server_http_respond(server, fd, data->parser.request);
+                return 0;
+            case 0:
+                // Read again
+                break;
+            case -1: // Bad request
+            case -2: // Internal error
+            default:
+                // TODO Handle bad requests a little better...
                 ods_server_drop_client(server, fd);
                 return -1;
-            case complete:
-                ods_server_http_respond(server, fd);
-                return 0;
-            default:
-                                return 0;
         }
     }
 
@@ -81,19 +79,11 @@ int ods_welcome(struct ods_server *server, struct ods_welcome_data *data, int fd
         // Nothing more to read, wait for next time
         return 0;
     }
-    else {
-        // Request is incompleted and buffer is full...
-        printf("My buffer is full, help !\n");
-        ods_server_drop_client(server, fd);
-        return -1;
-    }
-}
 
-enum _http_request_status_t _http_request_status(const char *buffer, int len) {
-    printf("%s\n", buffer);
-    return complete;
-    //return incomplete;
+    // What happened ?
+    return -1;
 }
+#undef BUFSIZE
 
 void ods_server_drop_client(struct ods_server *server, int fd) {
     printf("Dropping client with fd #%d\n", fd);
@@ -103,13 +93,19 @@ void ods_server_drop_client(struct ods_server *server, int fd) {
     bzero(&server->fd_infos[fd], sizeof(struct ods_fd_info));
 }
 
-void ods_server_http_respond(struct ods_server *server, int fd) {
-    // Temporary thing...
-    char *answer = "We've got your back dude!";
-    int len;
+void ods_server_http_respond(struct ods_server *server, int fd,
+                             struct ods_http_request *request) {
+    // By this time, the HTTP request should be available in the welcome data
+    int size = 512;
+    char buf[size];
 
-    len = strlen(answer) + 1;
-    write(fd, answer, len);
+    size = snprintf(buf, size, "Taking care of your request:\n"
+        "\tMethod:  %s\n"
+        "\tURI:     %s\n"
+        "\tVersion: %s\n",
+        request->method, request->uri, request->version);
+    write(fd, buf, size);
+    ods_server_drop_client(server, fd);
 }
 
 int ods_server_unschedule(struct ods_server *server, int fd) {
@@ -159,6 +155,8 @@ int ods_server_loop(struct ods_server *server) {
             action(server, data, fd);
         }
     }
+
+    return 0;
 }
 
 int ods_server_init(struct ods_server *server, struct ods_server_params *params) {

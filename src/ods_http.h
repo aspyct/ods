@@ -1,3 +1,6 @@
+#ifndef _ODS_HTTP_H_
+#define _ODS_HTTP_H_
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -85,3 +88,4 @@ int ods_http_headers_del(struct ods_http_headers *self,
 #define ods_http_headers_count(x) ((x)->count)
 #define ods_http_headers_last(x) (&(x)->items[(x)->count - 1])
 
+#endif /* _ODS_HTTP_H_ */

@@ -2,6 +2,7 @@
 #define _ODS_SERVER_H_
 
 #include "poller.h"
+#include "ods_http.h"
 
 struct ods_server_params {
     char *addr;
@@ -27,10 +28,8 @@ struct ods_server {
 struct ods_accept_data {
 };
 
-#define ODS_WELCOME_DATA_BUFSIZE 4096
 struct ods_welcome_data {
-    int offset;
-    char buffer[ODS_WELCOME_DATA_BUFSIZE];
+    struct ods_http_request_parser parser;
 };
 
 int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd);
@@ -49,6 +48,7 @@ int ods_server_read(struct ods_server *server, int fd, ods_action_t action);
 int ods_server_write(struct ods_server *server, int fd, char *buf, int n);
 int ods_server_unschedule(struct ods_server *server, int fd);
 void ods_server_drop_client(struct ods_server *server, int fd);
-void ods_server_http_respond(struct ods_server *server, int fd);
+void ods_server_http_respond(struct ods_server *server, int fd,
+                             struct ods_http_request *request);
 
 #endif /* _ODS_SERVER_H_ */
