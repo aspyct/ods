@@ -7,16 +7,26 @@
 #include <errno.h>
 #include <stdio.h>
 #include <strings.h>
+#include <fcntl.h>
+#include <string.h>
 
 #include "ods_server.h"
 
 #include "poller.h"
 
+enum _http_request_status_t {
+    incomplete,
+    complete,
+    invalid
+};
+
 static int _make_server_socket(struct addrinfo *ai, int qlen);
 static int _create_server(struct ods_server_params *params);
+static enum _http_request_status_t _http_request_status(const char *buffer, int len);
 
 int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd) {
     int client_fd;
+    int sock_flags;
 
     client_fd = accept(fd, NULL, NULL);
     if (client_fd < 0) {
@@ -24,13 +34,82 @@ int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd) 
         return -1;
     }
     else {
-        ods_server_set_data(server, client_fd, NULL);
+        sock_flags = fcntl(client_fd, F_GETFL, 0);
+        if (fcntl(client_fd, F_SETFL, sock_flags | O_NONBLOCK) < 0) {
+            perror("Could not set socket to non-blocking mode");
+            close(client_fd);
+        }
+
+        ods_server_set_data(server, client_fd, ods_welcome_data_create());
         return ods_server_read(server, client_fd, (ods_action_t)ods_welcome);
     }
 }
 
+struct ods_welcome_data *ods_welcome_data_create() {
+    return calloc(1, sizeof(struct ods_welcome_data));
+}
+
 int ods_welcome(struct ods_server *server, struct ods_welcome_data *data, int fd) {
-    return 0;
+    int n;
+    // -1 to keep a \0 at the end
+    int remaining = ODS_WELCOME_DATA_BUFSIZE - data->offset - 1; 
+    char *p = data->buffer + data->offset;
+
+    while (remaining && (n = read(fd, p, remaining)) >= 0) {
+        if (n == 0) {
+           // Client down
+           ods_server_drop_client(server, fd);
+           return -1;
+        }
+
+        remaining -= n;
+        data->offset += n;
+        
+        switch (_http_request_status(data->buffer, data->offset)) {
+            case invalid:
+                ods_server_drop_client(server, fd);
+                return -1;
+            case complete:
+                ods_server_http_respond(server, fd);
+                return 0;
+            default:
+                                return 0;
+        }
+    }
+
+    if (n < 0 && errno == EAGAIN) {
+        // Nothing more to read, wait for next time
+        return 0;
+    }
+    else {
+        // Request is incompleted and buffer is full...
+        printf("My buffer is full, help !\n");
+        ods_server_drop_client(server, fd);
+        return -1;
+    }
+}
+
+enum _http_request_status_t _http_request_status(const char *buffer, int len) {
+    printf("%s\n", buffer);
+    return complete;
+    //return incomplete;
+}
+
+void ods_server_drop_client(struct ods_server *server, int fd) {
+    printf("Dropping client with fd #%d\n", fd);
+    ods_server_unschedule(server, fd);
+
+    close(fd); // Doing it like a boss !
+    bzero(&server->fd_infos[fd], sizeof(struct ods_fd_info));
+}
+
+void ods_server_http_respond(struct ods_server *server, int fd) {
+    // Temporary thing...
+    char *answer = "We've got your back dude!";
+    int len;
+
+    len = strlen(answer) + 1;
+    write(fd, answer, len);
 }
 
 int ods_server_unschedule(struct ods_server *server, int fd) {

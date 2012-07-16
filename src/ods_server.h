@@ -25,15 +25,19 @@ struct ods_server {
 };
 
 struct ods_accept_data {
-
 };
 
+#define ODS_WELCOME_DATA_BUFSIZE 4096
 struct ods_welcome_data {
-
+    int offset;
+    char buffer[ODS_WELCOME_DATA_BUFSIZE];
 };
 
 int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd);
 int ods_welcome(struct ods_server *server, struct ods_welcome_data *data, int fd);
+
+struct ods_welcome_data *ods_welcome_data_create();
+void ods_welcome_data_destroy(struct ods_welcome_data *data);
 
 #define SCHEDULE_FOR_READ (POLL_FOR_READ)
 #define SCHEDULE_FOR_WRITE (POLL_FOR_WRITE)
@@ -44,5 +48,7 @@ int ods_server_loop(struct ods_server *server);
 int ods_server_read(struct ods_server *server, int fd, ods_action_t action);
 int ods_server_write(struct ods_server *server, int fd, char *buf, int n);
 int ods_server_unschedule(struct ods_server *server, int fd);
+void ods_server_drop_client(struct ods_server *server, int fd);
+void ods_server_http_respond(struct ods_server *server, int fd);
 
 #endif /* _ODS_SERVER_H_ */
