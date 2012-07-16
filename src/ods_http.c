@@ -35,6 +35,7 @@ int ods_http_request_parser_feed(struct ods_http_request_parser *self,
         overflow = 1;
     }
     strncpy(self->buffer + self->offset, food, len);
+    self->offset += len;
 
     // Now try and parse something
     parse:
