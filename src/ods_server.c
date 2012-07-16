@@ -17,10 +17,8 @@ static int _create_server(struct ods_server_params *params);
 
 int ods_accept(struct ods_server *server, struct ods_accept_data *data, int fd) {
     int client_fd;
-    struct sockaddr client_addr;
-    socklen_t addrlen;
 
-    client_fd = accept(fd, &client_addr, &addrlen);
+    client_fd = accept(fd, NULL, NULL);
     if (client_fd < 0) {
         perror("Could not accept client");
         return -1;
@@ -132,7 +130,7 @@ int _create_server(struct ods_server_params *params) {
         printf("Could not get addr info: %s\n", gai_strerror(err));
         return -1;
     }
-
+    
     for (aip = ailist; aip != NULL; aip = aip->ai_next) {
         if ((sock_fd = _make_server_socket(aip, params->qlen)) >= 0) {
             printf("Got socket for %s\n",
