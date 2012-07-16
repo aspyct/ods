@@ -9,11 +9,15 @@ int main() {
 
     ods_http_request_parser_init(&parser, 4096);
     char *str = "GET /hello/there HTTP/1.1\r\n\r\n";
-    ods_http_request_parser_feed(&parser, str, strlen(str));
+    int result = ods_http_request_parser_feed(&parser, str, strlen(str));
     printf("Method: %s, URI: %s, Version: %s\n",
             parser.request->method,
             parser.request->uri,
             parser.request->version);
+    if (result != 1) {
+        fprintf(stderr, "The request is properly finished");
+        exit(4);
+    }
 
     ods_http_request_parser_init(&parser, 4096);
     ods_http_request_parser_feed(&parser, "GET", 3);
